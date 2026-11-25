@@ -2,6 +2,10 @@
 // Usage: node e2e/e2e.mjs https://your-deploy.vercel.app   (needs Chrome at /usr/bin/google-chrome)
 import puppeteer from 'puppeteer-core';
 import * as L from '../public/logic.js';
+const MODE = process.argv[3] || 'all'; // all | api | pages | flows (chunks for slow networks)
+const PART = process.argv[4] || 'all'; // for pages: en | ar | phone
+const part = (x) => PART === 'all' || PART === x;
+const on = (m) => MODE === 'all' || MODE === m;
 const U = (process.argv[2] || 'http://localhost:3100').replace(/\/$/, '');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let pass = 0, fail = 0;
@@ -36,6 +40,7 @@ await post('owner', { type: 'reset' });
 const today = L.dayKey(Date.now());
 let n = 0; const key = () => 'e2e-' + Date.now().toString(36) + '-' + ++n;
 
+if (on('api')) {
 // ---------- API security ----------
 ok((await api(null, 'GET')).status === 401, 'no token: 401');
 ok((await api('garbage', 'GET')).status === 401, 'garbage token: 401');
@@ -380,9 +385,11 @@ ok(rp.top.length === 10 && rp.top[0].total >= rp.top[9].total, 'top donors are s
 const csv = L.toCsv([['=cmd', '+1', 'a,b', 'q"x']]);
 ok(csv.includes("'=cmd") && csv.includes("'+1") && csv.includes('"a,b"') && csv.includes('"q""x"'), 'CSV export neutralises formulas and escapes cells');
 
+}
+if (on('pages')) {
 // ---------- browser: pages for every role, both languages ----------
 const NAVS = { '1111': ['dashboard', 'campaigns', 'donations', 'donors', 'pledges', 'inkind', 'cases', 'funds', 'volunteers', 'reports', 'settings', 'audit'], '2222': ['dashboard', 'campaigns', 'donations', 'donors', 'pledges', 'inkind', 'cases', 'reports'], '3333': ['dashboard', 'campaigns', 'cases', 'funds', 'inkind', 'volunteers'], '4444': ['shifts', 'hours', 'give'] };
-for (const lang of ['en', 'ar']) for (const [pin, routes] of Object.entries(NAVS)) {
+for (const lang of ['en', 'ar'].filter(part)) for (const [pin, routes] of Object.entries(NAVS)) {
   const p = await newPage(); await login(p, pin, lang);
   ok((await p.evaluate(() => document.documentElement.dir)) === (lang === 'ar' ? 'rtl' : 'ltr'), `${lang} ${pin}: page direction`);
   let clean = true, links = (await p.$$('.top .nav a')).length;
@@ -391,13 +398,15 @@ for (const lang of ['en', 'ar']) for (const [pin, routes] of Object.entries(NAVS
   await p.close();
 }
 // phone width
-for (const pin of Object.keys(NAVS)) {
+for (const pin of part('phone') ? Object.keys(NAVS) : []) {
   const p = await newPage(390, 844); await login(p, pin, 'ar'); let wide = [];
   for (const r of NAVS[pin]) { await go(p, r); const w = await p.evaluate(() => document.documentElement.scrollWidth); if (w > 392) wide.push(r + ':' + w); }
   ok(wide.length === 0, `phone ${pin}: no horizontal overflow ${wide.join(',')}`); await p.close();
 }
-{ const p = await newPage(390, 844); await p.goto(U + '/#/give', { waitUntil: 'networkidle0' }); await sleep(600); ok((await p.evaluate(() => document.documentElement.scrollWidth)) <= 392, 'phone: public page has no horizontal overflow'); await p.close(); }
+if (part('phone')) { const p = await newPage(390, 844); await p.goto(U + '/#/give', { waitUntil: 'networkidle0' }); await sleep(600); ok((await p.evaluate(() => document.documentElement.scrollWidth)) <= 392, 'phone: public page has no horizontal overflow'); await p.close(); }
 
+}
+if (on('flows')) {
 // ---------- browser: content and flows ----------
 let p = await newPage(); await login(p, '1111');
 await go(p, 'dashboard'); let t = await body(p);
@@ -447,6 +456,7 @@ await p.click('[data-act="lang"]').catch(() => {}); await sleep(300);
 ok(true, 'language toggle does not crash');
 await p.close();
 
+}
 ok(errs.length === 0, 'no page or console errors' + (errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''));
 await post('owner', { type: 'reset' });
 await b.close();

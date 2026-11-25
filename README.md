@@ -52,6 +52,7 @@ npm ci
 PORT=3100 node dev-server.mjs         # http://localhost:3100
 npm test                              # unit tests (node:test)
 ./run-local.sh node e2e/e2e.mjs http://localhost:3100   # browser and API checks, needs Chrome
+# Chunks for slow networks: add  api | pages [en|ar|phone] | flows  after the URL
 node e2e/e2e.mjs https://your-deploy.vercel.app          # same checks against a deployment
 node e2e/shots.mjs http://localhost:3100                 # screenshots into docs/
 ```
