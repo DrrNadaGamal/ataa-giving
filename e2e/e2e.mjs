@@ -20,7 +20,7 @@ async function login(p, pin, lang = 'en') {
   await p.type('#pin', pin); await p.keyboard.press('Enter'); await p.waitForSelector('.top .nav', { timeout: 15000 }); await sleep(400);
 }
 const go = async (p, r) => { await p.evaluate((r) => (location.hash = '#/' + r), r); await sleep(450); };
-const body = (p) => p.evaluate(() => document.body.innerText);
+const body = async (p) => { for (let i = 0; i < 4; i++) { try { return await p.evaluate(() => document.body.innerText); } catch { await sleep(600); } } return ''; };
 const bare = /undefined|NaN|\[object/;
 async function api(token, method, bodyObj, raw, path = '/api/data') {
   const r = await fetch(U + path, { method, headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: raw ?? (bodyObj ? JSON.stringify(bodyObj) : undefined) });
